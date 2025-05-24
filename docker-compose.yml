@@ -1,0 +1,106 @@
+
+services:
+  frontend-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: frontend_db
+      POSTGRES_USER: frontend_user
+      POSTGRES_PASSWORD: frontend_pass
+    volumes:
+      - frontend_db_data:/var/lib/postgresql/data
+    networks:
+      - library-network
+
+  admin-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: admin_db
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: admin_pass
+    volumes:
+      - admin_db_data:/var/lib/postgresql/data
+    networks:
+      - library-network
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - library-network
+
+  frontend-api:
+    build: ./frontend-api
+    command: gunicorn frontend_api.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - ./frontend-api:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://frontend_user:frontend_pass@frontend-db/frontend_db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${FRONTEND_SECRET_KEY}
+      - INTER_SERVICE_TOKEN=${INTER_SERVICE_TOKEN}
+    depends_on:
+      - frontend-db
+      - redis
+    networks:
+      - library-network
+
+  admin-api:
+    build: ./admin-api
+    command: gunicorn admin_api.wsgi:application --bind 0.0.0.0:8001
+    volumes:
+      - ./admin-api:/app
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://admin_user:admin_pass@admin-db/admin_db
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=${ADMIN_SECRET_KEY}
+      - INTER_SERVICE_TOKEN=${INTER_SERVICE_TOKEN}
+      - FRONTEND_API_URL=http://frontend-api:8000
+    depends_on:
+      - admin-db
+      - redis
+    networks:
+      - library-network
+
+  celery-worker:
+    build: ./admin-api
+    command: celery -A admin_api worker -l info
+    volumes:
+      - ./admin-api:/app
+    environment:
+      - DATABASE_URL=postgresql://admin_user:admin_pass@admin-db/admin_db
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=${ADMIN_SECRET_KEY}
+      - INTER_SERVICE_TOKEN=${INTER_SERVICE_TOKEN}
+      - FRONTEND_API_URL=http://frontend-api:8000
+    depends_on:
+      - admin-db
+      - redis
+    networks:
+      - library-network
+
+  # Celery Beat for periodic tasks (if needed)
+  celery-beat:
+    build: ./admin-api
+    command: celery -A admin_api beat -l info
+    volumes:
+      - ./admin-api:/app
+    environment:
+      - DATABASE_URL=postgresql://admin_user:admin_pass@admin-db/admin_db
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=${ADMIN_SECRET_KEY}
+    depends_on:
+      - admin-db
+      - redis
+    networks:
+      - library-network
+
+volumes:
+  frontend_db_data:
+  admin_db_data:
+
+networks:
+  library-network:
+    driver: bridge
