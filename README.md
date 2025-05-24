@@ -529,8 +529,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - PostgreSQL for reliable data storage
 - Redis and Celery for async task processing
 
-## Contact
-
-Your Name - your.email@example.com
-
 Project Link: [https://github.com/Odion-Sonny/library-management-system](https://github.com/Odion-Sonny/library-management-system)
